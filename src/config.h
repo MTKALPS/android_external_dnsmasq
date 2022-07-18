@@ -293,3 +293,8 @@ NOTES:
 #  undef HAVE_SCRIPT
 #endif
 
+#ifndef DNSMASQ_MTK_CHANGES
+#define DNSMASQ_MTK_CHANGES
+#endif
+
+#define DNS_SERVER_DECOLLATOR "|"

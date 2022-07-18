@@ -46,6 +46,22 @@ int indextoname(int fd, int index, char *name)
 
 #endif
 
+static int dump_listeners(void) {
+  char debug_buff[MAXDNAME];
+  struct listener *listener;
+  
+  for (listener = daemon->listeners; listener; listener = listener->next)
+    {
+    	 struct irec *listener_iface = listener->iface;
+    	 if(listener_iface != NULL && ((&(listener_iface->addr)) != NULL)){
+  			prettyprint_addr(&listener_iface->addr, debug_buff);
+			my_syslog(LOG_DEBUG, _("dump_listeners listener %s"), debug_buff);	
+		}
+	}
+	
+	return 0;
+}
+
 int iface_check(int family, struct all_addr *addr, char *name, int *indexp)
 {
   struct iname *tmp;
@@ -915,7 +931,7 @@ void check_servers(void)
 }
 
 #ifdef __ANDROID__
-/* #define __ANDROID_DEBUG__ 1 */
+#define __ANDROID_DEBUG__ 1 
 /*
  * Ingests a new list of interfaces and starts to listen on them, adding only the new
  * and stopping to listen to any interfaces not on the new list.
@@ -933,7 +949,9 @@ void set_interfaces(const char *interfaces)
     int was_wild = 0;
 
 #ifdef __ANDROID_DEBUG__
-    my_syslog(LOG_DEBUG, _("set_interfaces(%s)"), interfaces);
+    my_syslog(LOG_DEBUG, _("-->set_interfaces(%s)"), interfaces);
+	/*don't dump listenner before initialization*/
+    //dump_listeners();
 #endif
     prev_if_names = daemon->if_names;
     daemon->if_names = NULL;
@@ -1021,13 +1039,36 @@ void set_interfaces(const char *interfaces)
       free(prev_if_names);
       prev_if_names = if_tmp;
     }
+#if 0    
     while (prev_interfaces) {
       struct irec *tmp_irec = prev_interfaces->next;
       free(prev_interfaces);
       prev_interfaces = tmp_irec;
     }
+#else
+   for (old_iface = prev_interfaces; old_iface; ) {
+      int found = 0;
+      for (new_iface = daemon->interfaces; new_iface; new_iface = new_iface->next) {
+        if (sockaddr_isequal(&old_iface->addr, &new_iface->addr)) {
+            found = -1;
+            break;
+        }
+      }
+      if (!found) {
+        char debug_buff[MAXDNAME];
+        prettyprint_addr(&old_iface->addr, debug_buff);
+        my_syslog(LOG_DEBUG, _("free old_iface %s"), debug_buff);
+        struct irec *tmp_irec = old_iface;
+        old_iface=old_iface->next;
+        free(tmp_irec);
+      } else{
+      	old_iface=old_iface->next;
+      }
+    }
+#endif
 #ifdef __ANDROID_DEBUG__
-    my_syslog(LOG_DEBUG, _("done with setInterfaces"));
+	dump_listeners();
+    my_syslog(LOG_DEBUG, _("<--done with setInterfaces"));
 #endif
 }
 
@@ -1070,12 +1111,12 @@ int set_servers(const char *servers)
 
   char *next = s;
   char *saddr;
-
+  my_syslog(LOG_ERR, _("[set_servers] %s"), next);
   /* Parse the mark. */
-  mark_string = strsep(&next, ":");
+  mark_string = strsep(&next, DNS_SERVER_DECOLLATOR);
   mark = strtoul(mark_string, NULL, 0);
 
-  while ((saddr = strsep(&next, ":"))) {
+  while ((saddr = strsep(&next, DNS_SERVER_DECOLLATOR))) {
       union mysockaddr addr, source_addr;
       memset(&addr, 0, sizeof(addr));
       memset(&source_addr, 0, sizeof(source_addr));
@@ -1093,6 +1134,7 @@ int set_servers(const char *servers)
 #ifdef HAVE_IPV6
       else if (inet_pton(AF_INET6, saddr, &addr.in6.sin6_addr) > 0)
 	{
+    	  my_syslog(LOG_ERR, _("[set_servers] HAVE_IPV6"));
 #ifdef HAVE_SOCKADDR_SA_LEN
 	  source_addr.in6.sin6_len = addr.in6.sin6_len = sizeof(source_addr.in6);
 #endif

@@ -207,9 +207,16 @@ int iface_enumerate(void *parm, int (*ipv4_callback)(), int (*ipv6_callback)())
 		    rta = RTA_NEXT(rta, len1);
 		  }
 		
-		if (addr.s_addr && ipv4_callback)
-		  if (!((*ipv4_callback)(addr, ifa->ifa_index, netmask, broadcast, parm)))
-		    return 0;
+		if (addr.s_addr && ipv4_callback){
+		    if (!((*ipv4_callback)(addr, ifa->ifa_index, netmask, broadcast, parm))){
+		        if (errno == ENODEV){
+		        	my_syslog(LOG_WARNING, _("iface_enumerate, if_index(%d) removed!!"),ifa->ifa_index);
+	            	sleep(1);
+	          		goto again;
+	      		}
+		    	return 0;
+			}
+		}
 	      }
 #ifdef HAVE_IPV6
 	    else if (ifa->ifa_family == AF_INET6)
